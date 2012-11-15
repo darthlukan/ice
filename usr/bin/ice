@@ -16,6 +16,8 @@ pygtk.require("2.0")
 import gtk
 from subprocess import *
 
+# TODO: This section up to the first class definition should be
+# reworked. Let's handle this in the Ice class for more sane parsing.
 #Make the directories (thanks Fuduntu for catching this one).
 if not os.path.exists('$HOME/.local/'):
     os.system("mkdir -p $HOME/.local/")
@@ -61,6 +63,11 @@ iconplace = str("/usr/share/pixmaps/ice.png")
 
 #Probably should have wedged this into the main class.
 class IconSel(gtk.FileChooserDialog):
+    """
+        Creates the dialog that allows the user to select the
+        desired application icon.  Provides a filter specific to
+        supported image formats and handles button input.
+    """
 
     #Because gtk.FileChooserDialog is WAY sexier than gtk.FileSelection.
     def __init__(self):
@@ -92,100 +99,17 @@ class IconSel(gtk.FileChooserDialog):
 
 #The fun part...
 class Ice(gtk.Window):
-
-    #I really hope this one is self explanatory.
-    def destroy(self, widget):
-        gtk.main_quit()
-
-    #See line 60.
-    def filesel(self, widget):
-        IconSel()
-
-    #I'm sure there's a "better" way to do this, but
-    #it works, damn it.
-    def menu(self, widget):
-        global locmenu
-        global menuloc
-        locmenu = widget.get_active_text()
-        if str(locmenu) == str(b[1]).replace("\n", ""):
-            menuloc = str("Utility;")
-        elif str(locmenu) == str(b[2]).replace("\n", ""):
-            menuloc = str("Game;")
-        elif str(locmenu) == str(b[3]).replace("\n", ""):
-            menuloc = str("Graphics;")
-        elif str(locmenu) == str(b[4]).replace("\n", ""):
-            menuloc = str("Network;")
-        elif str(locmenu) == str(b[5]).replace("\n", ""):
-            menuloc = str("Office;")
-        elif str(locmenu) == str(b[6]).replace("\n", ""):
-            menuloc = str("Development;")
-        elif str(locmenu) == str(b[7]).replace("\n", ""):
-            menuloc = str("AudioVideo;")
-        elif str(locmenu) == str(b[8]).replace("\n", ""):
-            menuloc = str("System;")
-
-    #I'm still not entirely sure what I was smoking
-    #when I put this together.
-    def icondl(self, widget):
-        global appurl
-        appurl = url.get_text()
-        url1 = appurl.replace ( 'http://', '' )
-        url2 = url1.replace( '/', ' ' )
-        url3 = url2.split()
-        url4 = str(url3[0]) + str("/favicon.ico")
-        os.system("if [ -f /tmp/favicon.png ]; then rm /tmp/favicon.png; fi")
-        os.system("wget -O /tmp/favicon.png " + str(url4))
-        global iconplace
-        if os.path.getsize("/tmp/favicon.png") > 0:
-            iconplace = "/tmp/favicon.png"
-        else:
-            iconplace = "/usr/share/pixmaps/ice.png"
-
-    #Make the "Apply" button do something.
-    def applicate(self, widget):
-
-        #Get the necessary variables.
-        global appurl
-        appurl = url.get_text()
-        global appname
-        appname = name.get_text()
-        global dirname
-        dirname = appname.lower().replace ( ' ', '.' )
-        global desktop2
-        desktop2 = dirname.replace( '.', '_' )
-        global desktop
-        desktop = desktop2.replace( '-', '_' )
-
-        #Copy the icon.
-        os.system("cp --force " + str(iconplace) + " $HOME/.local/share/ice/" + str(desktop) + ".png")
-
-        #Create the .desktop file.
-        appfile = os.path.expanduser("~/.local/share/applications/" + str(desktop) + ".desktop")
-
-        os.system("touch " + appfile)
-
-        with open(appfile, 'w') as appfile1:
-            appfile1.truncate()
-            appfile1.write("[Desktop Entry]\n")
-            appfile1.write("Version=1.0\n")
-            appfile1.write("Name=" + str(appname) + "\n")
-            appfile1.write("Exec=chromium-browser --app=" + str(appurl) + "\n")
-            appfile1.write("Terminal=false\n")
-            appfile1.write("X-MultipleArgs=false\n")
-            appfile1.write("Type=Application\n")
-            appfile1.write("Icon=$HOME/.local/share/ice/" + str(desktop) + ".png\n")
-            appfile1.write("Categories=GTK;" + str(menuloc) + "\n")
-            appfile1.write("MimeType=text/html;text/xml;application/xhtml_xml;\n")
-            appfile1.write("StartupWMClass=Chromium\n")
-            appfile1.write("StartupNotify=true\n")
-
-        #Reset everything after creating the files.
-        url.set_text(str(b[9]).replace("\n", ""))
-        name.set_text(str(b[10]).replace("\n", ""))
-        self.fill_store()
-
+    """
+        Main GUI class.  Provides methods for building the GTK window
+        and interacting with it.
+    """
+    
     #The really big def for the gui. :)
     def __init__(self):
+        """
+            Builds the needed GTK Window properties.
+        """
+
         super(Ice, self).__init__()
         self.current_directory = os.path.realpath(os.path.expanduser('~') + "/.local/share/applications/")
 
@@ -197,6 +121,8 @@ class Ice(gtk.Window):
         self.set_position(gtk.WIN_POS_CENTER)
 
         #URL and Name boxes and functions.
+        # TODO: Either set these outside of the class so that they are truly global,
+        # or make them class variables.
         global url
         url = gtk.Entry()
         url.set_text(str(b[9]).replace("\n", ""))
@@ -322,8 +248,118 @@ class Ice(gtk.Window):
         self.add(mainb1)
         self.show_all()
 
-    #Get rid of the selected webapp.
+    def destroy(self, widget):
+        """
+            Kills the main application window.
+        """
+        gtk.main_quit()
+
+    def filesel(self, widget):
+        """
+            Creates an instance of the IconSel class which allows
+            our user to select an icon for their application.
+        """
+        
+        # TODO: This needs to be reworked.
+        IconSel()
+
+    #I'm sure there's a "better" way to do this, but
+    #it works, damn it.
+    def menu(self, widget):
+        """
+            Creates the menu that sets what type of application the user is
+            creating and where in the system menu it should go.
+        """
+        
+        # TODO: More global relocation/redefinition.        
+        global locmenu
+        global menuloc
+        locmenu = widget.get_active_text()
+        if str(locmenu) == str(b[1]).replace("\n", ""):
+            menuloc = str("Utility;")
+        elif str(locmenu) == str(b[2]).replace("\n", ""):
+            menuloc = str("Game;")
+        elif str(locmenu) == str(b[3]).replace("\n", ""):
+            menuloc = str("Graphics;")
+        elif str(locmenu) == str(b[4]).replace("\n", ""):
+            menuloc = str("Network;")
+        elif str(locmenu) == str(b[5]).replace("\n", ""):
+            menuloc = str("Office;")
+        elif str(locmenu) == str(b[6]).replace("\n", ""):
+            menuloc = str("Development;")
+        elif str(locmenu) == str(b[7]).replace("\n", ""):
+            menuloc = str("AudioVideo;")
+        elif str(locmenu) == str(b[8]).replace("\n", ""):
+            menuloc = str("System;")
+
+    #I'm still not entirely sure what I was smoking
+    #when I put this together.
+    def icondl(self, widget):
+        global appurl
+        appurl = url.get_text()
+        url1 = appurl.replace ( 'http://', '' )
+        url2 = url1.replace( '/', ' ' )
+        url3 = url2.split()
+        url4 = str(url3[0]) + str("/favicon.ico")
+        os.system("if [ -f /tmp/favicon.png ]; then rm /tmp/favicon.png; fi")
+        os.system("wget -O /tmp/favicon.png " + str(url4))
+        global iconplace
+        if os.path.getsize("/tmp/favicon.png") > 0:
+            iconplace = "/tmp/favicon.png"
+        else:
+            iconplace = "/usr/share/pixmaps/ice.png"
+
+    #Make the "Apply" button do something.
+    def applicate(self, widget):
+        """
+            Apply the user inputted changes.
+            
+            Copies over icons into $HOME, provides menu awareness.
+        """
+        # TODO: More global relocation/redefinition.
+        global appurl
+        appurl = url.get_text()
+        global appname
+        appname = name.get_text()
+        global dirname
+        dirname = appname.lower().replace ( ' ', '.' )
+        global desktop2
+        desktop2 = dirname.replace( '.', '_' )
+        global desktop
+        desktop = desktop2.replace( '-', '_' )
+
+        #Copy the icon.
+        os.system("cp --force " + str(iconplace) + " $HOME/.local/share/ice/" + str(desktop) + ".png")
+
+        #Create the .desktop file.
+        appfile = os.path.expanduser("~/.local/share/applications/" + str(desktop) + ".desktop")
+
+        os.system("touch " + appfile)
+
+        with open(appfile, 'w') as appfile1:
+            appfile1.truncate()
+            appfile1.write("[Desktop Entry]\n")
+            appfile1.write("Version=1.0\n")
+            appfile1.write("Name=" + str(appname) + "\n")
+            appfile1.write("Exec=chromium-browser --app=" + str(appurl) + "\n")
+            appfile1.write("Terminal=false\n")
+            appfile1.write("X-MultipleArgs=false\n")
+            appfile1.write("Type=Application\n")
+            appfile1.write("Icon=$HOME/.local/share/ice/" + str(desktop) + ".png\n")
+            appfile1.write("Categories=GTK;" + str(menuloc) + "\n")
+            appfile1.write("MimeType=text/html;text/xml;application/xhtml_xml;\n")
+            appfile1.write("StartupWMClass=Chromium\n")
+            appfile1.write("StartupNotify=true\n")
+
+        #Reset everything after creating the files.
+        url.set_text(str(b[9]).replace("\n", ""))
+        name.set_text(str(b[10]).replace("\n", ""))
+        self.fill_store()
+
     def remove(self, widget):
+        """
+            Remove the selected webapp.
+        """
         items = dest.get_selected_items()
         for specific in items:
             death = str(specific).strip('(,)')
