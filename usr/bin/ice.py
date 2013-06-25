@@ -1,0 +1,421 @@
+#!/usr/bin/env python
+#
+# by Kendall Weaver <kendall@peppermintos.com>
+# for Peppermint OS
+#
+# Ice is a simple app that builds Site Specific Browsers
+# using Chromium as a backend. Chromium itself has this
+# capability, but there was no way to cleanly integrate
+# with the LXDE menu, thus the reason this damn thing
+# came into existence...that and booze...lots of booze.
+
+import os
+import pwd
+import pygtk
+pygtk.require("2.0")
+import gtk
+from subprocess import Popen, PIPE
+
+# Rather than use globals, we keep everything tidy by wrapping it
+# all in its own class. This keeps it organized and easier to maintain.
+class Setup(object):
+    """
+    Handles all of the initial checks and gets us set up for
+    using the Ice and Iconsel classes.
+    """
+    def __init__(self):
+        
+        self.user_home = pwd.getpwuid(os.getuid())[5]
+        self.COL_PATH = 0
+        self.COL_PIXBUF = 1
+        self.locale = ''
+        self.loc = ''
+        self.b = ''
+
+        #One day I'll stop being lazy and do something about this:
+        self.iconplace = str("/usr/share/pixmaps/ice.png")
+
+    def home_local(self):
+        """
+        Checks if our local directories are in place.  Creates them
+        otherwise.
+
+        Returns boolean
+        """
+        try:
+            #Make the directories (thanks Fuduntu for catching this one).
+            if not os.path.exists('%s/.local/share/ice' % self.user_home):
+                os.mkdirs("%s/.local/share/ice" % self.user_home)
+            if not os.path.exists('%s/.local/share/applications/' % self.user_home):
+                os.mkdirs("%s/.local/share/applications/" % self.user_home)
+            return True
+        except Exception:
+            return False
+
+     def locale_config(self):
+         """
+         Sets our locale and translation file.
+
+         Returns location file contents.
+         """
+
+         self.locale = os.getenv("LANG").split('_')[0]  # Gives us 'en' on US systems 'en_US.UTF-8'.
+
+         if os.path.exists("/usr/share/ice/" + self.locale) == True:
+             self.loc = self.locale
+         else:
+             self.loc = "en"
+
+         with open("/usr/share/ice/" + self.loc, 'r') as a:
+             self.b = a.readlines()
+
+         return self.b
+
+#Probably should have wedged this into the main class.
+class IconSel(gtk.FileChooserDialog):
+    """
+        Creates the dialog that allows the user to select the
+        desired application icon.  Provides a filter specific to
+        supported image formats and handles button input.
+    """
+
+    #Because gtk.FileChooserDialog is WAY sexier than gtk.FileSelection.
+    def __init__(self):
+        self.setup = Setup()
+        self.filew = gtk.FileChooserDialog(title=str(self.setup.b[16]).replace("\n", ""), action=gtk.FILE_CHOOSER_ACTION_OPEN, buttons=(gtk.STOCK_CANCEL,gtk.RESPONSE_CANCEL,gtk.STOCK_OPEN,gtk.RESPONSE_OK))
+        self.filew.set_current_folder_uri("file:///usr/share/pixmaps")
+
+        #Filter for images only.
+        filter1 = gtk.FileFilter()
+        filter1.set_name(str(self.setup.b[0]).replace("\n", ""))
+        filter1.add_mime_type("image/png")
+        filter1.add_mime_type("image/jpeg")
+        filter1.add_mime_type("image/gif")
+        filter1.add_pattern("*.png")
+        filter1.add_pattern("*.jpg")
+        filter1.add_pattern("*.gif")
+        filter1.add_pattern("*.xpm")
+        filter1.add_pattern("*.svg")
+        self.filew.add_filter(filter1)
+
+        #Make the buttons do something.
+        response = self.filew.run()
+        if response == gtk.RESPONSE_OK:
+            global iconplace
+            icontemp = self.filew.get_filename()
+            iconplace = str(icontemp)
+            self.filew.destroy()
+        elif response == gtk.RESPONSE_CANCEL:
+            self.filew.destroy()
+
+#The fun part...
+class Ice(gtk.Window):
+    """
+        Main GUI class.  Provides methods for building the GTK window
+        and interacting with it.
+    """
+    
+    #The really big def for the gui. :)
+    def __init__(self):
+        """
+            Builds the needed GTK Window properties.
+        """
+
+        self.setup = Setup()
+        super(Ice, self).__init__()
+        self.current_directory = os.path.realpath(os.path.expanduser('~') + "/.local/share/applications/")
+
+        #Set the default window parameters.
+        self.set_size_request(460, 350)
+        self.set_title("Ice")
+        self.set_icon_from_file("/usr/share/pixmaps/ice.png")
+        self.connect("destroy", self.destroy)
+        self.set_position(gtk.WIN_POS_CENTER)
+
+        #URL and Name boxes and functions.
+        # TODO: Either set these outside of the class so that they are truly global,
+        # or make them class variables.
+        self.url
+        self.url = gtk.Entry()
+        self.url.set_text(str(self.setup.b[9]).replace("\n", ""))
+        self.appurl
+        self.appurl = self.url.get_text()
+        self.name
+        self.name = gtk.Entry()
+        self.name.set_text(str(self.setup.b[10]).replace("\n", ""))
+        self.appname
+        self.appname = self.name.get_text()
+
+        #Apply and Close buttons and functions.
+        apply1 = gtk.Button(str(self.setup.b[11]).replace("\n", ""))
+        apply1.connect("clicked", self.applicate)
+        close1 = gtk.Button(str(self.setup.b[13]).replace("\n", ""))
+        close1.connect("clicked", self.destroy)
+        remove1 = gtk.Button(str(self.setup.b[12]).replace("\n", ""))
+        remove1.connect("clicked", self.remove)
+        close2 = gtk.Button(str(self.setup.b[13]).replace("\n", ""))
+        close2.connect("clicked", self.destroy)
+
+        #ComboBox for selecting menu location.
+        where = gtk.combo_box_new_text()
+        where.connect("changed", self.menu)
+        where.append_text(str(self.setup.b[1]).replace("\n", ""))
+        where.append_text(str(self.setup.b[2]).replace("\n", ""))
+        where.append_text(str(self.setup.b[3]).replace("\n", ""))
+        where.append_text(str(self.setup.b[4]).replace("\n", ""))
+        where.append_text(str(self.setup.b[5]).replace("\n", ""))
+        where.append_text(str(self.setup.b[6]).replace("\n", ""))
+        where.append_text(str(self.setup.b[7]).replace("\n", ""))
+        where.append_text(str(self.setup.b[8]).replace("\n", ""))
+        where.set_active(3)
+
+        label3 = gtk.Label(str(self.setup.b[14]).replace("\n", ""))
+
+        #Icon selection button and function.
+        iconlab = gtk.Label(str(self.setup.b[15]).replace("\n", ""))
+        iconsel = gtk.Button(str(self.setup.b[16]).replace("\n", ""))
+        iconsel.connect("clicked", self.filesel)
+        webconlab = gtk.Label(str(self.setup.b[17]).replace("\n", ""))
+        webconsel = gtk.Button(str(self.setup.b[18]).replace("\n", ""))
+        webconsel.connect("clicked", self.icondl)
+
+        #The rest of the window layout.
+        label1 = gtk.Label(str(self.setup.b[19]).replace("\n", ""))
+        label2 = gtk.Label("")
+        label4 = gtk.Label("")
+
+        applyclose = gtk.HBox()
+        applyclose.pack_start(apply1)
+        applyclose.pack_start(close1)
+
+        hbox4 = gtk.HBox()
+        hbox4.pack_start(label3)
+        hbox4.pack_start(where)
+
+        hbox2 = gtk.HBox()
+        hbox2.pack_start(label2)
+        hbox2.pack_start(applyclose)
+
+        hbox1 = gtk.HBox(5, 0)
+        hbox1.pack_start(iconlab)
+        hbox1.pack_start(iconsel)
+
+        hbox3 = gtk.HBox(5, 0)
+        hbox3.pack_start(webconlab)
+        hbox3.pack_start(webconsel)
+
+        vbox1 = gtk.VBox(0, 10)
+        vbox1.pack_start(label1, True, False, 0)
+        vbox1.pack_start(self.url, True, False, 0)
+        vbox1.pack_start(self.name, True, False, 0)
+        vbox1.pack_start(hbox4, True, False, 0)
+        vbox1.pack_start(hbox1, True, False, 0)
+        vbox1.pack_start(hbox3, True, False, 0)
+        vbox1.pack_start(hbox2, True, False, 0)
+
+        hbox = gtk.HBox(10, 10)
+        hbox.pack_start(vbox1, False, False, 10)
+
+        hbox5 = gtk.HBox()
+        hbox5.pack_start(remove1)
+        hbox5.pack_start(close2)
+
+        hbox6 = gtk.HBox(10, 10)
+        hbox6.pack_start(label4)
+        hbox6.pack_start(hbox5)
+
+        vbox2 = gtk.VBox()
+
+        self.store = self.create_store()
+        self.fill_store()
+
+        #Don't ask why I put this here of all places.
+        self.dest
+        self.dest = gtk.IconView(self.store)
+        self.dest.set_selection_mode(gtk.SELECTION_SINGLE)
+
+        scrw = gtk.ScrolledWindow()
+        scrw.set_shadow_type(gtk.SHADOW_ETCHED_IN)
+        scrw.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        scrw.add(self.dest)
+
+        vbox2.pack_start(scrw, True, True, 0)
+        vbox2.pack_start(hbox6, False, False, 0)
+        
+        self.dest.set_text_column(self.setup.COL_PATH)
+        self.dest.set_pixbuf_column(self.setup.COL_PIXBUF)
+
+        book = gtk.Notebook()
+        lab1 = gtk.Label(str(self.setup.b[11]).replace("\n", ""))
+        lab2 = gtk.Label(str(self.setup.b[12]).replace("\n", ""))
+        book.set_tab_pos(gtk.POS_TOP)
+        book.append_page(hbox, lab1)
+        book.append_page(vbox2, lab2)
+
+        mainb = gtk.VBox(10, 10)
+        mainb.pack_start(book, True, True, 10)
+        mainb1 = gtk.HBox(10, 10)
+        mainb1.pack_start(mainb, True, True, 10)
+
+        self.add(mainb1)
+        self.show_all()
+
+    def destroy(self, widget):
+        """
+            Kills the main application window.
+        """
+        gtk.main_quit()
+
+    def filesel(self, widget):
+        """
+            Creates an instance of the IconSel class which allows
+            our user to select an icon for their application.
+        """
+        
+        # TODO: This needs to be reworked.
+        IconSel()
+
+    #I'm sure there's a "better" way to do this, but
+    #it works, damn it.
+    def menu(self, widget):
+        """
+            Creates the menu that sets what type of application the user is
+            creating and where in the system menu it should go.
+        """
+        
+        # TODO: More global relocation/redefinition.        
+        global locmenu
+        global menuloc
+        locmenu = widget.get_active_text()
+        if str(locmenu) == str(self.setup.b[1]).replace("\n", ""):
+            menuloc = str("Utility;")
+        elif str(locmenu) == str(self.setup.b[2]).replace("\n", ""):
+            menuloc = str("Game;")
+        elif str(locmenu) == str(self.setup.b[3]).replace("\n", ""):
+            menuloc = str("Graphics;")
+        elif str(locmenu) == str(self.setup.b[4]).replace("\n", ""):
+            menuloc = str("Network;")
+        elif str(locmenu) == str(self.setup.b[5]).replace("\n", ""):
+            menuloc = str("Office;")
+        elif str(locmenu) == str(self.setup.b[6]).replace("\n", ""):
+            menuloc = str("Development;")
+        elif str(locmenu) == str(self.setup.b[7]).replace("\n", ""):
+            menuloc = str("AudioVideo;")
+        elif str(locmenu) == str(self.setup.b[8]).replace("\n", ""):
+            menuloc = str("System;")
+
+    #I'm still not entirely sure what I was smoking
+    #when I put this together.
+    def icondl(self, widget):
+        self.appurl
+        self.appurl = self.url.get_text()
+        url1 = self.appurl.replace ( 'http://', '' )
+        url2 = url1.replace( '/', ' ' )
+        url3 = url2.split()
+        url4 = str(url3[0]) + str("/favicon.ico")
+        os.system("if [ -f /tmp/favicon.png ]; then rm /tmp/favicon.png; fi")
+        os.system("wget -O /tmp/favicon.png " + str(url4))
+        self.iconplace
+        if os.path.getsize("/tmp/favicon.png") > 0:
+            self.iconplace = "/tmp/favicon.png"
+        else:
+            self.iconplace = "/usr/share/pixmaps/ice.png"
+
+    #Make the "Apply" button do something.
+    def applicate(self, widget):
+        """
+            Apply the user inputted changes.
+            
+            Copies over icons into $HOME, provides menu awareness.
+        """
+        # TODO: More global relocation/redefinition.
+        self.appurl
+        self.appurl = self.url.get_text()
+        self.appname
+        self.appname = self.name.get_text()
+        self.dirname
+        self.dirname = self.appname.lower().replace ( ' ', '.' )
+        self.desktop2
+        self.desktop2 = self.dirname.replace( '.', '_' )
+        self.desktop
+        self.desktop = self.desktop2.replace( '-', '_' )
+
+        #Copy the icon.
+        os.system("cp --force " + str(self.iconplace) + " $HOME/.local/share/ice/" + str(self.desktop) + ".png")
+
+        #Create the .desktop file.
+        appfile = os.path.expanduser("~/.local/share/applications/" + str(self.desktop) + ".desktop")
+
+        os.system("touch " + appfile)
+
+        with open(appfile, 'w') as appfile1:
+            appfile1.truncate()
+            appfile1.write("[Desktop Entry]\n")
+            appfile1.write("Version=1.0\n")
+            appfile1.write("Name=" + str(self.appname) + "\n")
+            appfile1.write("Exec=chromium-browser --app=" + str(self.appurl) + "\n")
+            appfile1.write("Terminal=false\n")
+            appfile1.write("X-MultipleArgs=false\n")
+            appfile1.write("Type=Application\n")
+            appfile1.write("Icon=$HOME/.local/share/ice/" + str(self.desktop) + ".png\n")
+            appfile1.write("Categories=GTK;" + str(self.menuloc) + "\n")
+            appfile1.write("MimeType=text/html;text/xml;application/xhtml_xml;\n")
+            appfile1.write("StartupWMClass=Chromium\n")
+            appfile1.write("StartupNotify=true\n")
+
+        #Reset everything after creating the files.
+        self.url.set_text(str(self.setup.b[9]).replace("\n", ""))
+        self.name.set_text(str(self.setup.b[10]).replace("\n", ""))
+        self.fill_store()
+
+    def remove(self, widget):
+        """
+            Remove the selected webapp.
+        """
+        items = self.dest.get_selected_items()
+        for specific in items:
+            death = str(specific).strip('(,)')
+            self.potential.sort()
+            dead = self.potential[int(death)]
+            os.system("rm " + self.current_directory + '/' + dead)
+            self.fill_store()
+
+    #Pretty rudimentary.
+    def create_store(self):
+        store = gtk.ListStore(str, gtk.gdk.Pixbuf, bool)
+        store.set_sort_column_id(self.setup.COL_PATH, gtk.SORT_ASCENDING)
+        return store
+            
+    #...
+    def fill_store(self):
+        self.store.clear()
+
+        global potential
+        potential = []
+
+        for fl in os.listdir(self.current_directory):
+            if not os.path.isdir(self.current_directory + '/' + fl):
+                with open(self.current_directory + '/' + fl) as d:
+                    for line in d:
+                        if line[0] == "N" and line[1] == "a":
+                            name1 = line.replace("Name=", "")
+                            name = name1.replace("\n", "")
+                        if line[0] == "I" and line[1] == "c":
+                            iconline1 = line.replace("Icon=", "")
+                            iconline = iconline1.replace("\n", "")
+                            if os.path.exists(iconline):
+                                if os.path.getsize(iconline) > 0:
+                                    icon = gtk.gdk.pixbuf_new_from_file_at_size(iconline, 16, 16)
+                                else:
+                                    icon = gtk.gdk.pixbuf_new_from_file_at_size("/usr/share/pixmaps/ice.png", 16, 16)
+                            else:
+                                icon = gtk.gdk.pixbuf_new_from_file_at_size("/usr/share/pixmaps/ice.png", 16, 16)
+                        result = line.find('StartupWMClass=Chromium')
+                        if not result == -1:
+                            self.store.append([name, icon, False])
+                            potential.append(fl)
+        
+#Make it so, number one.
+if __name__ == "__main__":
+    Ice()
+    gtk.main()
