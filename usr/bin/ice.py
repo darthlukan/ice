@@ -12,9 +12,9 @@
 import os
 import pwd
 import pygtk
-pygtk.require("2.0")
 import gtk
 from subprocess import Popen, PIPE
+
 
 # Rather than use globals, we keep everything tidy by wrapping it
 # all in its own class. This keeps it organized and easier to maintain.
@@ -23,8 +23,9 @@ class Setup(object):
     Handles all of the initial checks and gets us set up for
     using the Ice and Iconsel classes.
     """
+
     def __init__(self):
-        
+
         self.user_home = pwd.getpwuid(os.getuid())[5]
         self.COL_PATH = 0
         self.COL_PIXBUF = 1
@@ -32,7 +33,7 @@ class Setup(object):
         self.loc = ''
         self.b = ''
 
-        #One day I'll stop being lazy and do something about this:
+        # One day I'll stop being lazy and do something about this:
         self.iconplace = str("/usr/share/pixmaps/ice.png")
 
     def home_local(self):
@@ -43,35 +44,36 @@ class Setup(object):
         Returns boolean
         """
         try:
-            #Make the directories (thanks Fuduntu for catching this one).
+            # Make the directories (thanks Fuduntu for catching this one).
             if not os.path.exists('%s/.local/share/ice' % self.user_home):
                 os.mkdirs("%s/.local/share/ice" % self.user_home)
             if not os.path.exists('%s/.local/share/applications/' % self.user_home):
                 os.mkdirs("%s/.local/share/applications/" % self.user_home)
             return True
-        except Exception:
+        except OSError or Exception:
             return False
 
-     def locale_config(self):
-         """
-         Sets our locale and translation file.
+    def locale_config(self):
+        """
+        Sets our locale and translation file.
 
-         Returns location file contents.
-         """
+        Returns location file contents.
+        """
 
-         self.locale = os.getenv("LANG").split('_')[0]  # Gives us 'en' on US systems 'en_US.UTF-8'.
+        self.locale = os.getenv("LANG").split('_')[0]  # Gives us 'en' on US systems 'en_US.UTF-8'.
 
-         if os.path.exists("/usr/share/ice/" + self.locale) == True:
-             self.loc = self.locale
-         else:
-             self.loc = "en"
+        if os.path.exists("/usr/share/ice/" + self.locale):
+            self.loc = self.locale
+        else:
+            self.loc = "en"
 
-         with open("/usr/share/ice/" + self.loc, 'r') as a:
-             self.b = a.readlines()
+        with open("/usr/share/ice/" + self.loc, 'r') as a:
+            self.b = a.readlines()
 
-         return self.b
+        return self.b
 
-#Probably should have wedged this into the main class.
+
+# Probably should have wedged this into the main class.
 class IconSel(gtk.FileChooserDialog):
     """
         Creates the dialog that allows the user to select the
@@ -79,13 +81,15 @@ class IconSel(gtk.FileChooserDialog):
         supported image formats and handles button input.
     """
 
-    #Because gtk.FileChooserDialog is WAY sexier than gtk.FileSelection.
+    # Because gtk.FileChooserDialog is WAY sexier than gtk.FileSelection.
     def __init__(self):
         self.setup = Setup()
-        self.filew = gtk.FileChooserDialog(title=str(self.setup.b[16]).replace("\n", ""), action=gtk.FILE_CHOOSER_ACTION_OPEN, buttons=(gtk.STOCK_CANCEL,gtk.RESPONSE_CANCEL,gtk.STOCK_OPEN,gtk.RESPONSE_OK))
+        self.filew = gtk.FileChooserDialog(title=str(self.setup.b[16]).replace("\n", ""),
+                                           action=gtk.FILE_CHOOSER_ACTION_OPEN, buttons=(
+            gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL, gtk.STOCK_OPEN, gtk.RESPONSE_OK))
         self.filew.set_current_folder_uri("file:///usr/share/pixmaps")
 
-        #Filter for images only.
+        # Filter for images only.
         filter1 = gtk.FileFilter()
         filter1.set_name(str(self.setup.b[0]).replace("\n", ""))
         filter1.add_mime_type("image/png")
@@ -98,7 +102,7 @@ class IconSel(gtk.FileChooserDialog):
         filter1.add_pattern("*.svg")
         self.filew.add_filter(filter1)
 
-        #Make the buttons do something.
+        # Make the buttons do something.
         response = self.filew.run()
         if response == gtk.RESPONSE_OK:
             global iconplace
@@ -108,14 +112,15 @@ class IconSel(gtk.FileChooserDialog):
         elif response == gtk.RESPONSE_CANCEL:
             self.filew.destroy()
 
-#The fun part...
+
+# The fun part...
 class Ice(gtk.Window):
     """
         Main GUI class.  Provides methods for building the GTK window
         and interacting with it.
     """
-    
-    #The really big def for the gui. :)
+
+    # The really big def for the gui. :)
     def __init__(self):
         """
             Builds the needed GTK Window properties.
@@ -132,7 +137,7 @@ class Ice(gtk.Window):
         self.connect("destroy", self.destroy)
         self.set_position(gtk.WIN_POS_CENTER)
 
-        #URL and Name boxes and functions.
+        # URL and Name boxes and functions.
         # TODO: Either set these outside of the class so that they are truly global,
         # or make them class variables.
         self.url
@@ -146,7 +151,7 @@ class Ice(gtk.Window):
         self.appname
         self.appname = self.name.get_text()
 
-        #Apply and Close buttons and functions.
+        # Apply and Close buttons and functions.
         apply1 = gtk.Button(str(self.setup.b[11]).replace("\n", ""))
         apply1.connect("clicked", self.applicate)
         close1 = gtk.Button(str(self.setup.b[13]).replace("\n", ""))
@@ -156,7 +161,7 @@ class Ice(gtk.Window):
         close2 = gtk.Button(str(self.setup.b[13]).replace("\n", ""))
         close2.connect("clicked", self.destroy)
 
-        #ComboBox for selecting menu location.
+        # ComboBox for selecting menu location.
         where = gtk.combo_box_new_text()
         where.connect("changed", self.menu)
         where.append_text(str(self.setup.b[1]).replace("\n", ""))
@@ -171,7 +176,7 @@ class Ice(gtk.Window):
 
         label3 = gtk.Label(str(self.setup.b[14]).replace("\n", ""))
 
-        #Icon selection button and function.
+        # Icon selection button and function.
         iconlab = gtk.Label(str(self.setup.b[15]).replace("\n", ""))
         iconsel = gtk.Button(str(self.setup.b[16]).replace("\n", ""))
         iconsel.connect("clicked", self.filesel)
@@ -229,7 +234,7 @@ class Ice(gtk.Window):
         self.store = self.create_store()
         self.fill_store()
 
-        #Don't ask why I put this here of all places.
+        # Don't ask why I put this here of all places.
         self.dest
         self.dest = gtk.IconView(self.store)
         self.dest.set_selection_mode(gtk.SELECTION_SINGLE)
@@ -241,7 +246,7 @@ class Ice(gtk.Window):
 
         vbox2.pack_start(scrw, True, True, 0)
         vbox2.pack_start(hbox6, False, False, 0)
-        
+
         self.dest.set_text_column(self.setup.COL_PATH)
         self.dest.set_pixbuf_column(self.setup.COL_PIXBUF)
 
@@ -271,18 +276,18 @@ class Ice(gtk.Window):
             Creates an instance of the IconSel class which allows
             our user to select an icon for their application.
         """
-        
+
         # TODO: This needs to be reworked.
         IconSel()
 
-    #I'm sure there's a "better" way to do this, but
-    #it works, damn it.
+    # I'm sure there's a "better" way to do this, but
+    # it works, damn it.
     def menu(self, widget):
         """
             Creates the menu that sets what type of application the user is
             creating and where in the system menu it should go.
         """
-        
+
         # TODO: More global relocation/redefinition.        
         global locmenu
         global menuloc
@@ -304,13 +309,13 @@ class Ice(gtk.Window):
         elif str(locmenu) == str(self.setup.b[8]).replace("\n", ""):
             menuloc = str("System;")
 
-    #I'm still not entirely sure what I was smoking
-    #when I put this together.
+    # I'm still not entirely sure what I was smoking
+    # when I put this together.
     def icondl(self, widget):
         self.appurl
         self.appurl = self.url.get_text()
-        url1 = self.appurl.replace ( 'http://', '' )
-        url2 = url1.replace( '/', ' ' )
+        url1 = self.appurl.replace('http://', '')
+        url2 = url1.replace('/', ' ')
         url3 = url2.split()
         url4 = str(url3[0]) + str("/favicon.ico")
         os.system("if [ -f /tmp/favicon.png ]; then rm /tmp/favicon.png; fi")
@@ -321,7 +326,7 @@ class Ice(gtk.Window):
         else:
             self.iconplace = "/usr/share/pixmaps/ice.png"
 
-    #Make the "Apply" button do something.
+    # Make the "Apply" button do something.
     def applicate(self, widget):
         """
             Apply the user inputted changes.
@@ -334,16 +339,14 @@ class Ice(gtk.Window):
         self.appname
         self.appname = self.name.get_text()
         self.dirname
-        self.dirname = self.appname.lower().replace ( ' ', '.' )
+        self.dirname = self.appname.lower().replace(' ', '.')
         self.desktop2
-        self.desktop2 = self.dirname.replace( '.', '_' )
+        self.desktop2 = self.dirname.replace('.', '_')
         self.desktop
-        self.desktop = self.desktop2.replace( '-', '_' )
+        self.desktop = self.desktop2.replace('-', '_')
 
-        #Copy the icon.
         os.system("cp --force " + str(self.iconplace) + " $HOME/.local/share/ice/" + str(self.desktop) + ".png")
 
-        #Create the .desktop file.
         appfile = os.path.expanduser("~/.local/share/applications/" + str(self.desktop) + ".desktop")
 
         os.system("touch " + appfile)
@@ -363,7 +366,7 @@ class Ice(gtk.Window):
             appfile1.write("StartupWMClass=Chromium\n")
             appfile1.write("StartupNotify=true\n")
 
-        #Reset everything after creating the files.
+        # Reset everything after creating the files.
         self.url.set_text(str(self.setup.b[9]).replace("\n", ""))
         self.name.set_text(str(self.setup.b[10]).replace("\n", ""))
         self.fill_store()
@@ -380,13 +383,11 @@ class Ice(gtk.Window):
             os.system("rm " + self.current_directory + '/' + dead)
             self.fill_store()
 
-    #Pretty rudimentary.
     def create_store(self):
         store = gtk.ListStore(str, gtk.gdk.Pixbuf, bool)
         store.set_sort_column_id(self.setup.COL_PATH, gtk.SORT_ASCENDING)
         return store
-            
-    #...
+
     def fill_store(self):
         self.store.clear()
 
@@ -414,7 +415,7 @@ class Ice(gtk.Window):
                         if not result == -1:
                             self.store.append([name, icon, False])
                             potential.append(fl)
-        
+
 #Make it so, number one.
 if __name__ == "__main__":
     Ice()
